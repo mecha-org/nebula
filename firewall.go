@@ -380,6 +380,7 @@ func AddFirewallRulesFromConfig(l *logrus.Logger, inbound bool, c *config.C, fw 
 var ErrInvalidRemoteIP = errors.New("remote IP is not in remote certificate subnets")
 var ErrInvalidLocalIP = errors.New("local IP is not in list of handled local IPs")
 var ErrNoMatchingRule = errors.New("no matching rule in firewall table")
+var ErrNoMatchingDomain = errors.New("no matching domain in host and peer certificates")
 
 // Drop returns an error if the packet should be dropped, explaining why. It
 // returns nil if the packet should not be dropped.
@@ -409,6 +410,23 @@ func (f *Firewall) Drop(packet []byte, fp firewall.Packet, incoming bool, h *Hos
 		return ErrInvalidLocalIP
 	}
 
+	// Check if any of the domain matches
+	remoteDomains := h.ConnectionState.peerCert.Details.Domains
+	hostDomains := h.ConnectionState.certState.certificate.Details.Domains
+	domainMatched := false
+
+	for _, remoteDomain := range remoteDomains {
+		for _, hostDomain := range hostDomains {
+			if hostDomain == remoteDomain {
+				domainMatched = true
+			}
+		}
+	}
+	if !domainMatched {
+		return ErrNoMatchingDomain
+	}
+
+	// Check against firewall table
 	table := f.OutRules
 	if incoming {
 		table = f.InRules

@@ -26,6 +26,7 @@ type caFlags struct {
 	outKeyPath       *string
 	outCertPath      *string
 	outQRPath        *string
+	domains          *string
 	groups           *string
 	ips              *string
 	subnets          *string
@@ -46,6 +47,7 @@ func newCaFlags() *caFlags {
 	cf.outCertPath = cf.set.String("out-crt", "ca.crt", "Optional: path to write the certificate to")
 	cf.outQRPath = cf.set.String("out-qr", "", "Optional: output a qr code image (png) of the certificate")
 	cf.groups = cf.set.String("groups", "", "Optional: comma separated list of groups. This will limit which groups subordinate certs can use")
+	cf.domains = cf.set.String("domains", "*", "Optional: comma separated list of domains. This will limit which domains subordinate certs can use. Wildcards (*, *.domain.com) are supported to scope what domains can be added")
 	cf.ips = cf.set.String("ips", "", "Optional: comma separated list of ipv4 address and network in CIDR notation. This will limit which ipv4 addresses and networks subordinate certs can use for ip addresses")
 	cf.subnets = cf.set.String("subnets", "", "Optional: comma separated list of ipv4 address and network in CIDR notation. This will limit which ipv4 addresses and networks subordinate certs can use in subnets")
 	cf.argonMemory = cf.set.Uint("argon-memory", 2*1024*1024, "Optional: Argon2 memory parameter (in KiB) used for encrypted private key passphrase")
@@ -95,6 +97,16 @@ func ca(args []string, out io.Writer, errOut io.Writer, pr PasswordReader) error
 
 	if *cf.duration <= 0 {
 		return &helpError{"-duration must be greater than 0"}
+	}
+
+	var domains []string
+	if *cf.domains != "" {
+		for _, rg := range strings.Split(*cf.domains, ",") {
+			d := strings.TrimSpace(rg)
+			if d != "" {
+				domains = append(domains, d)
+			}
+		}
 	}
 
 	var groups []string
@@ -190,6 +202,7 @@ func ca(args []string, out io.Writer, errOut io.Writer, pr PasswordReader) error
 		Details: cert.NebulaCertificateDetails{
 			Name:      *cf.name,
 			Groups:    groups,
+			Domains:   domains,
 			Ips:       ips,
 			Subnets:   subnets,
 			NotBefore: time.Now(),

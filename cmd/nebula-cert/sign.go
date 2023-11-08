@@ -23,6 +23,7 @@ type signFlags struct {
 	caCertPath  *string
 	name        *string
 	ip          *string
+	domains     *string
 	duration    *time.Duration
 	inPubPath   *string
 	outKeyPath  *string
@@ -44,10 +45,10 @@ func newSignFlags() *signFlags {
 	sf.outKeyPath = sf.set.String("out-key", "", "Optional (if in-pub not set): path to write the private key to")
 	sf.outCertPath = sf.set.String("out-crt", "", "Optional: path to write the certificate to")
 	sf.outQRPath = sf.set.String("out-qr", "", "Optional: output a qr code image (png) of the certificate")
+	sf.domains = sf.set.String("domains", "", "Optional: Assign network domains to the cert, restricting the nodes it can connect to, wildcards not allowed; prefer fully qualified domains")
 	sf.groups = sf.set.String("groups", "", "Optional: comma separated list of groups")
 	sf.subnets = sf.set.String("subnets", "", "Optional: comma separated list of ipv4 address and network in CIDR notation. Subnets this cert can serve for")
 	return &sf
-
 }
 
 func signCert(args []string, out io.Writer, errOut io.Writer, pr PasswordReader) error {
@@ -149,6 +150,17 @@ func signCert(args []string, out io.Writer, errOut io.Writer, pr PasswordReader)
 	}
 	ipNet.IP = ip
 
+	domains := []string{}
+	if *sf.domains != "" {
+		for _, rg := range strings.Split(*sf.domains, ",") {
+			d := strings.TrimSpace(rg)
+			// TODO: Validate if the domains are fully qualified domain names
+			if d != "" {
+				domains = append(domains, d)
+			}
+		}
+	}
+
 	groups := []string{}
 	if *sf.groups != "" {
 		for _, rg := range strings.Split(*sf.groups, ",") {
@@ -198,6 +210,7 @@ func signCert(args []string, out io.Writer, errOut io.Writer, pr PasswordReader)
 		Details: cert.NebulaCertificateDetails{
 			Name:      *sf.name,
 			Ips:       []*net.IPNet{ipNet},
+			Domains:   domains,
 			Groups:    groups,
 			Subnets:   subnets,
 			NotBefore: time.Now(),

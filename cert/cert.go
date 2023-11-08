@@ -27,17 +27,17 @@ import (
 const publicKeyLen = 32
 
 const (
-	CertBanner                       = "NEBULA CERTIFICATE"
-	X25519PrivateKeyBanner           = "NEBULA X25519 PRIVATE KEY"
-	X25519PublicKeyBanner            = "NEBULA X25519 PUBLIC KEY"
-	EncryptedEd25519PrivateKeyBanner = "NEBULA ED25519 ENCRYPTED PRIVATE KEY"
-	Ed25519PrivateKeyBanner          = "NEBULA ED25519 PRIVATE KEY"
-	Ed25519PublicKeyBanner           = "NEBULA ED25519 PUBLIC KEY"
+	CertBanner                       = "MECHA CERTIFICATE"
+	X25519PrivateKeyBanner           = "MECHA X25519 PRIVATE KEY"
+	X25519PublicKeyBanner            = "MECHA X25519 PUBLIC KEY"
+	EncryptedEd25519PrivateKeyBanner = "MECHA ED25519 ENCRYPTED PRIVATE KEY"
+	Ed25519PrivateKeyBanner          = "MECHA ED25519 PRIVATE KEY"
+	Ed25519PublicKeyBanner           = "MECHA ED25519 PUBLIC KEY"
 
-	P256PrivateKeyBanner               = "NEBULA P256 PRIVATE KEY"
-	P256PublicKeyBanner                = "NEBULA P256 PUBLIC KEY"
-	EncryptedECDSAP256PrivateKeyBanner = "NEBULA ECDSA P256 ENCRYPTED PRIVATE KEY"
-	ECDSAP256PrivateKeyBanner          = "NEBULA ECDSA P256 PRIVATE KEY"
+	P256PrivateKeyBanner               = "MECHA P256 PRIVATE KEY"
+	P256PublicKeyBanner                = "MECHA P256 PUBLIC KEY"
+	EncryptedECDSAP256PrivateKeyBanner = "MECHA ECDSA P256 ENCRYPTED PRIVATE KEY"
+	ECDSAP256PrivateKeyBanner          = "MECHA ECDSA P256 PRIVATE KEY"
 )
 
 type NebulaCertificate struct {
@@ -58,6 +58,7 @@ type NebulaCertificateDetails struct {
 	Ips       []*net.IPNet
 	Subnets   []*net.IPNet
 	Groups    []string
+	Domains   []string
 	NotBefore time.Time
 	NotAfter  time.Time
 	PublicKey []byte
@@ -66,6 +67,9 @@ type NebulaCertificateDetails struct {
 
 	// Map of groups for faster lookup
 	InvertedGroups map[string]struct{}
+
+	// Map of domains for faster lookup
+	InvertedDomains map[string]struct{}
 
 	Curve Curve
 }
@@ -110,22 +114,25 @@ func UnmarshalNebulaCertificate(b []byte) (*NebulaCertificate, error) {
 
 	nc := NebulaCertificate{
 		Details: NebulaCertificateDetails{
-			Name:           rc.Details.Name,
-			Groups:         make([]string, len(rc.Details.Groups)),
-			Ips:            make([]*net.IPNet, len(rc.Details.Ips)/2),
-			Subnets:        make([]*net.IPNet, len(rc.Details.Subnets)/2),
-			NotBefore:      time.Unix(rc.Details.NotBefore, 0),
-			NotAfter:       time.Unix(rc.Details.NotAfter, 0),
-			PublicKey:      make([]byte, len(rc.Details.PublicKey)),
-			IsCA:           rc.Details.IsCA,
-			InvertedGroups: make(map[string]struct{}),
-			Curve:          rc.Details.Curve,
+			Name:            rc.Details.Name,
+			Domains:         make([]string, len(rc.Details.Domains)),
+			Groups:          make([]string, len(rc.Details.Groups)),
+			Ips:             make([]*net.IPNet, len(rc.Details.Ips)/2),
+			Subnets:         make([]*net.IPNet, len(rc.Details.Subnets)/2),
+			NotBefore:       time.Unix(rc.Details.NotBefore, 0),
+			NotAfter:        time.Unix(rc.Details.NotAfter, 0),
+			PublicKey:       make([]byte, len(rc.Details.PublicKey)),
+			IsCA:            rc.Details.IsCA,
+			InvertedDomains: make(map[string]struct{}),
+			InvertedGroups:  make(map[string]struct{}),
+			Curve:           rc.Details.Curve,
 		},
 		Signature: make([]byte, len(rc.Signature)),
 	}
 
 	copy(nc.Signature, rc.Signature)
 	copy(nc.Details.Groups, rc.Details.Groups)
+	copy(nc.Details.Domains, rc.Details.Domains)
 	nc.Details.Issuer = hex.EncodeToString(rc.Details.Issuer)
 
 	if len(rc.Details.PublicKey) < publicKeyLen {
@@ -151,6 +158,10 @@ func UnmarshalNebulaCertificate(b []byte) (*NebulaCertificate, error) {
 
 	for _, g := range rc.Details.Groups {
 		nc.Details.InvertedGroups[g] = struct{}{}
+	}
+
+	for _, d := range rc.Details.Domains {
+		nc.Details.InvertedDomains[d] = struct{}{}
 	}
 
 	return &nc, nil
@@ -667,6 +678,8 @@ func (nc *NebulaCertificate) CheckRootConstrains(signer *NebulaCertificate) erro
 		}
 	}
 
+	// TODO: If the signer has a limited set of domains then make sure cert only contains a subset
+
 	// If the signer has a limited set of ip ranges to issue from make sure the cert only contains a subset
 	if len(signer.Details.Ips) > 0 {
 		for _, ip := range nc.Details.Ips {
@@ -773,6 +786,16 @@ func (nc *NebulaCertificate) String() string {
 		s += "\t\tSubnets: []\n"
 	}
 
+	if len(nc.Details.Domains) > 0 {
+		s += "\t\tDomains: [\n"
+		for _, g := range nc.Details.Domains {
+			s += fmt.Sprintf("\t\t\t\"%v\"\n", g)
+		}
+		s += "\t\t]\n"
+	} else {
+		s += "\t\tDomains: []\n"
+	}
+
 	if len(nc.Details.Groups) > 0 {
 		s += "\t\tGroups: [\n"
 		for _, g := range nc.Details.Groups {
@@ -804,6 +827,7 @@ func (nc *NebulaCertificate) String() string {
 func (nc *NebulaCertificate) getRawDetails() *RawNebulaCertificateDetails {
 	rd := &RawNebulaCertificateDetails{
 		Name:      nc.Details.Name,
+		Domains:   nc.Details.Domains,
 		Groups:    nc.Details.Groups,
 		NotBefore: nc.Details.NotBefore.Unix(),
 		NotAfter:  nc.Details.NotAfter.Unix(),
@@ -892,6 +916,7 @@ func (nc *NebulaCertificate) MarshalJSON() ([]byte, error) {
 			"name":      nc.Details.Name,
 			"ips":       toString(nc.Details.Ips),
 			"subnets":   toString(nc.Details.Subnets),
+			"domains":   nc.Details.Domains,
 			"groups":    nc.Details.Groups,
 			"notBefore": nc.Details.NotBefore,
 			"notAfter":  nc.Details.NotAfter,
@@ -920,22 +945,24 @@ func (nc *NebulaCertificate) MarshalJSON() ([]byte, error) {
 func (nc *NebulaCertificate) Copy() *NebulaCertificate {
 	c := &NebulaCertificate{
 		Details: NebulaCertificateDetails{
-			Name:           nc.Details.Name,
-			Groups:         make([]string, len(nc.Details.Groups)),
-			Ips:            make([]*net.IPNet, len(nc.Details.Ips)),
-			Subnets:        make([]*net.IPNet, len(nc.Details.Subnets)),
-			NotBefore:      nc.Details.NotBefore,
-			NotAfter:       nc.Details.NotAfter,
-			PublicKey:      make([]byte, len(nc.Details.PublicKey)),
-			IsCA:           nc.Details.IsCA,
-			Issuer:         nc.Details.Issuer,
-			InvertedGroups: make(map[string]struct{}, len(nc.Details.InvertedGroups)),
+			Name:            nc.Details.Name,
+			Groups:          make([]string, len(nc.Details.Groups)),
+			Ips:             make([]*net.IPNet, len(nc.Details.Ips)),
+			Subnets:         make([]*net.IPNet, len(nc.Details.Subnets)),
+			NotBefore:       nc.Details.NotBefore,
+			NotAfter:        nc.Details.NotAfter,
+			PublicKey:       make([]byte, len(nc.Details.PublicKey)),
+			IsCA:            nc.Details.IsCA,
+			Issuer:          nc.Details.Issuer,
+			InvertedDomains: make(map[string]struct{}, len(nc.Details.InvertedDomains)),
+			InvertedGroups:  make(map[string]struct{}, len(nc.Details.InvertedGroups)),
 		},
 		Signature: make([]byte, len(nc.Signature)),
 	}
 
 	copy(c.Signature, nc.Signature)
 	copy(c.Details.Groups, nc.Details.Groups)
+	copy(c.Details.Domains, nc.Details.Domains)
 	copy(c.Details.PublicKey, nc.Details.PublicKey)
 
 	for i, p := range nc.Details.Ips {
@@ -954,6 +981,10 @@ func (nc *NebulaCertificate) Copy() *NebulaCertificate {
 		}
 		copy(c.Details.Subnets[i].IP, p.IP)
 		copy(c.Details.Subnets[i].Mask, p.Mask)
+	}
+
+	for d := range nc.Details.InvertedDomains {
+		c.Details.InvertedDomains[d] = struct{}{}
 	}
 
 	for g := range nc.Details.InvertedGroups {
