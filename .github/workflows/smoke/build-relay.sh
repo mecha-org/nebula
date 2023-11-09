@@ -34,8 +34,8 @@ relay:
   use_relays: false
 EOF
 
-    ../../../../nebula-cert ca -name "Smoke Test" -domains "*.nebula.net"
-    ../../../../nebula-cert sign -name "lighthouse1" -groups "lighthouse,lighthouse1" -ip "192.168.100.1/24" -domains "*.nebula.net"
+    ../../../../nebula-cert ca -name "Smoke Test" -domains "a.nebula.net"
+    ../../../../nebula-cert sign -name "lighthouse1" -groups "lighthouse,lighthouse1" -ip "192.168.100.1/24" -domains "a.nebula.net"
     ../../../../nebula-cert sign -name "host2" -groups "host,host2" -ip "192.168.100.2/24" -domains "a.nebula.net"
     ../../../../nebula-cert sign -name "host3" -groups "host,host3" -ip "192.168.100.3/24" -domains "a.nebula.net"
     ../../../../nebula-cert sign -name "host4" -groups "host,host4" -ip "192.168.100.4/24" -domains "a.nebula.net"
