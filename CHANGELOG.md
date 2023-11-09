@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix a freeze during config reload if the `static_host_map` config was changed. (#886)
 
+### Feature
+
+- **Mecha** - Adds support for `domains` in nebula ca and cert, check [PR 
+#1](https://github.com/mecha-org/nebula/pull/1)
+
+
 ## [1.7.1] - 2023-05-18
 
 ### Fixed
