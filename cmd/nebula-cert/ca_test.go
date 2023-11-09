@@ -37,6 +37,8 @@ func Test_caHelp(t *testing.T) {
 			"    \tOptional: Argon2 parallelism parameter used for encrypted private key passphrase (default 4)\n"+
 			"  -curve string\n"+
 			"    \tEdDSA/ECDSA Curve (25519, P256) (default \"25519\")\n"+
+			"  -domains string\n"+
+			"    \tOptional: comma separated list of domains. This will limit which domains subordinate certs can use. Wildcards (*, *.domain.com) are supported to scope what domains can be added (default \"*\")\n"+
 			"  -duration duration\n"+
 			"    \tOptional: amount of time the certificate should be valid for. Valid time units are seconds: \"s\", minutes: \"m\", hours: \"h\" (default 8760h0m0s)\n"+
 			"  -encrypt\n"+

@@ -159,24 +159,41 @@ func TestFirewall_Drop(t *testing.T) {
 		Mask: net.IPMask{255, 255, 255, 0},
 	}
 
-	c := cert.NebulaCertificate{
+	c1 := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:           "host1",
-			Ips:            []*net.IPNet{&ipNet},
-			Groups:         []string{"default-group"},
-			InvertedGroups: map[string]struct{}{"default-group": {}},
-			Issuer:         "signer-shasum",
+			Name:            "host1",
+			Ips:             []*net.IPNet{&ipNet},
+			Groups:          []string{"default-group"},
+			Domains:         []string{"nebula.net"},
+			InvertedGroups:  map[string]struct{}{"default-group": {}},
+			InvertedDomains: map[string]struct{}{"nebula.net": {}},
+			Issuer:          "signer-shasum",
+		},
+	}
+
+	c2 := cert.NebulaCertificate{
+		Details: cert.NebulaCertificateDetails{
+			Name:            "host2",
+			Ips:             []*net.IPNet{&ipNet},
+			Groups:          []string{"default-group"},
+			Domains:         []string{"nebula.net"},
+			InvertedGroups:  map[string]struct{}{"default-group": {}},
+			InvertedDomains: map[string]struct{}{"nebula.net": {}},
+			Issuer:          "signer-shasum",
 		},
 	}
 	h := HostInfo{
 		ConnectionState: &ConnectionState{
-			peerCert: &c,
+			peerCert: &c2,
+			certState: &CertState{
+				certificate: &c1,
+			},
 		},
 		vpnIp: iputil.Ip2VpnIp(ipNet.IP),
 	}
-	h.CreateRemoteCIDR(&c)
+	h.CreateRemoteCIDR(&c2)
 
-	fw := NewFirewall(l, time.Second, time.Minute, time.Hour, &c)
+	fw := NewFirewall(l, time.Second, time.Minute, time.Hour, &c2)
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"any"}, "", nil, nil, "", ""))
 	cp := cert.NewCAPool()
 
@@ -195,27 +212,27 @@ func TestFirewall_Drop(t *testing.T) {
 	p.RemoteIP = oldRemote
 
 	// ensure signer doesn't get in the way of group checks
-	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c)
+	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c2)
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"nope"}, "", nil, nil, "", "signer-shasum"))
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"default-group"}, "", nil, nil, "", "signer-shasum-bad"))
 	assert.Equal(t, fw.Drop([]byte{}, p, true, &h, cp, nil), ErrNoMatchingRule)
 
 	// test caSha doesn't drop on match
-	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c)
+	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c2)
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"nope"}, "", nil, nil, "", "signer-shasum-bad"))
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"default-group"}, "", nil, nil, "", "signer-shasum"))
 	assert.NoError(t, fw.Drop([]byte{}, p, true, &h, cp, nil))
 
 	// ensure ca name doesn't get in the way of group checks
 	cp.CAs["signer-shasum"] = &cert.NebulaCertificate{Details: cert.NebulaCertificateDetails{Name: "ca-good"}}
-	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c)
+	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c2)
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"nope"}, "", nil, nil, "ca-good", ""))
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"default-group"}, "", nil, nil, "ca-good-bad", ""))
 	assert.Equal(t, fw.Drop([]byte{}, p, true, &h, cp, nil), ErrNoMatchingRule)
 
 	// test caName doesn't drop on match
 	cp.CAs["signer-shasum"] = &cert.NebulaCertificate{Details: cert.NebulaCertificateDetails{Name: "ca-good"}}
-	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c)
+	fw = NewFirewall(l, time.Second, time.Minute, time.Hour, &c2)
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"nope"}, "", nil, nil, "ca-good-bad", ""))
 	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"default-group"}, "", nil, nil, "ca-good", ""))
 	assert.NoError(t, fw.Drop([]byte{}, p, true, &h, cp, nil))
@@ -362,14 +379,19 @@ func TestFirewall_Drop2(t *testing.T) {
 
 	c := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:           "host1",
-			Ips:            []*net.IPNet{&ipNet},
-			InvertedGroups: map[string]struct{}{"default-group": {}, "test-group": {}},
+			Name:            "host1",
+			Ips:             []*net.IPNet{&ipNet},
+			Domains:         []string{"nebula.net"},
+			InvertedGroups:  map[string]struct{}{"default-group": {}, "test-group": {}},
+			InvertedDomains: map[string]struct{}{"nebula.net": {}},
 		},
 	}
 	h := HostInfo{
 		ConnectionState: &ConnectionState{
 			peerCert: &c,
+			certState: &CertState{
+				certificate: &c,
+			},
 		},
 		vpnIp: iputil.Ip2VpnIp(ipNet.IP),
 	}
@@ -377,14 +399,19 @@ func TestFirewall_Drop2(t *testing.T) {
 
 	c1 := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:           "host1",
-			Ips:            []*net.IPNet{&ipNet},
-			InvertedGroups: map[string]struct{}{"default-group": {}, "test-group-not": {}},
+			Name:            "host2",
+			Ips:             []*net.IPNet{&ipNet},
+			Domains:         []string{"nebula.net"},
+			InvertedGroups:  map[string]struct{}{"default-group": {}, "test-group-not": {}},
+			InvertedDomains: map[string]struct{}{"nebula.net": {}},
 		},
 	}
 	h1 := HostInfo{
 		ConnectionState: &ConnectionState{
 			peerCert: &c1,
+			certState: &CertState{
+				certificate: &c,
+			},
 		},
 	}
 	h1.CreateRemoteCIDR(&c1)
@@ -421,21 +448,26 @@ func TestFirewall_Drop3(t *testing.T) {
 
 	c := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name: "host-owner",
-			Ips:  []*net.IPNet{&ipNet},
+			Name:    "host-owner",
+			Ips:     []*net.IPNet{&ipNet},
+			Domains: []string{"nebula.net"},
 		},
 	}
 
 	c1 := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:   "host1",
-			Ips:    []*net.IPNet{&ipNet},
-			Issuer: "signer-sha-bad",
+			Name:    "host1",
+			Ips:     []*net.IPNet{&ipNet},
+			Issuer:  "signer-sha-bad",
+			Domains: []string{"nebula.net"},
 		},
 	}
 	h1 := HostInfo{
 		ConnectionState: &ConnectionState{
 			peerCert: &c1,
+			certState: &CertState{
+				certificate: &c,
+			},
 		},
 		vpnIp: iputil.Ip2VpnIp(ipNet.IP),
 	}
@@ -443,14 +475,18 @@ func TestFirewall_Drop3(t *testing.T) {
 
 	c2 := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:   "host2",
-			Ips:    []*net.IPNet{&ipNet},
-			Issuer: "signer-sha",
+			Name:    "host2",
+			Ips:     []*net.IPNet{&ipNet},
+			Issuer:  "signer-sha",
+			Domains: []string{"nebula.net"},
 		},
 	}
 	h2 := HostInfo{
 		ConnectionState: &ConnectionState{
 			peerCert: &c2,
+			certState: &CertState{
+				certificate: &c,
+			},
 		},
 		vpnIp: iputil.Ip2VpnIp(ipNet.IP),
 	}
@@ -458,14 +494,18 @@ func TestFirewall_Drop3(t *testing.T) {
 
 	c3 := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:   "host3",
-			Ips:    []*net.IPNet{&ipNet},
-			Issuer: "signer-sha-bad",
+			Name:    "host3",
+			Ips:     []*net.IPNet{&ipNet},
+			Issuer:  "signer-sha-bad",
+			Domains: []string{"nebula.net"},
 		},
 	}
 	h3 := HostInfo{
 		ConnectionState: &ConnectionState{
 			peerCert: &c3,
+			certState: &CertState{
+				certificate: &c,
+			},
 		},
 		vpnIp: iputil.Ip2VpnIp(ipNet.IP),
 	}
@@ -484,6 +524,75 @@ func TestFirewall_Drop3(t *testing.T) {
 	// c3 should fail because no match
 	resetConntrack(fw)
 	assert.Equal(t, fw.Drop([]byte{}, p, true, &h3, cp, nil), ErrNoMatchingRule)
+}
+
+func TestFirewall_Drop4(t *testing.T) {
+	l := test.NewLogger()
+	ob := &bytes.Buffer{}
+	l.SetOutput(ob)
+
+	p := firewall.Packet{
+		LocalIP:    iputil.Ip2VpnIp(net.IPv4(1, 2, 3, 4)),
+		RemoteIP:   iputil.Ip2VpnIp(net.IPv4(1, 2, 3, 4)),
+		LocalPort:  10,
+		RemotePort: 90,
+		Protocol:   firewall.ProtoUDP,
+		Fragment:   false,
+	}
+
+	ipNet := net.IPNet{
+		IP:   net.IPv4(1, 2, 3, 4),
+		Mask: net.IPMask{255, 255, 255, 0},
+	}
+
+	c := cert.NebulaCertificate{
+		Details: cert.NebulaCertificateDetails{
+			Name:            "host1",
+			Ips:             []*net.IPNet{&ipNet},
+			Domains:         []string{"nebula1.net"},
+			InvertedGroups:  map[string]struct{}{"default-group": {}, "test-group": {}},
+			InvertedDomains: map[string]struct{}{"nebula.net": {}},
+		},
+	}
+	h := HostInfo{
+		ConnectionState: &ConnectionState{
+			peerCert: &c,
+			certState: &CertState{
+				certificate: &c,
+			},
+		},
+		vpnIp: iputil.Ip2VpnIp(ipNet.IP),
+	}
+	h.CreateRemoteCIDR(&c)
+
+	c1 := cert.NebulaCertificate{
+		Details: cert.NebulaCertificateDetails{
+			Name:            "host1",
+			Ips:             []*net.IPNet{&ipNet},
+			Domains:         []string{"nebula2.net"},
+			InvertedGroups:  map[string]struct{}{"default-group": {}, "test-group": {}},
+			InvertedDomains: map[string]struct{}{"nebula2.net": {}},
+		},
+	}
+	h1 := HostInfo{
+		ConnectionState: &ConnectionState{
+			peerCert: &c1,
+			certState: &CertState{
+				certificate: &c,
+			},
+		},
+	}
+	h1.CreateRemoteCIDR(&c1)
+
+	fw := NewFirewall(l, time.Second, time.Minute, time.Hour, &c)
+	assert.Nil(t, fw.AddRule(true, firewall.ProtoAny, 0, 0, []string{"default-group", "test-group"}, "", nil, nil, "", ""))
+	cp := cert.NewCAPool()
+
+	// h1/c1 lacks the matching domains
+	assert.Error(t, fw.Drop([]byte{}, p, true, &h1, cp, nil), ErrNoMatchingDomain)
+	// c has the matching domains
+	resetConntrack(fw)
+	assert.NoError(t, fw.Drop([]byte{}, p, true, &h, cp, nil))
 }
 
 func TestFirewall_DropConntrackReload(t *testing.T) {
@@ -507,16 +616,21 @@ func TestFirewall_DropConntrackReload(t *testing.T) {
 
 	c := cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:           "host1",
-			Ips:            []*net.IPNet{&ipNet},
-			Groups:         []string{"default-group"},
-			InvertedGroups: map[string]struct{}{"default-group": {}},
-			Issuer:         "signer-shasum",
+			Name:            "host1",
+			Ips:             []*net.IPNet{&ipNet},
+			Groups:          []string{"default-group"},
+			Domains:         []string{"nebula.net"},
+			InvertedGroups:  map[string]struct{}{"default-group": {}},
+			InvertedDomains: map[string]struct{}{"nebula.net": {}},
+			Issuer:          "signer-shasum",
 		},
 	}
 	h := HostInfo{
 		ConnectionState: &ConnectionState{
 			peerCert: &c,
+			certState: &CertState{
+				certificate: &c,
+			},
 		},
 		vpnIp: iputil.Ip2VpnIp(ipNet.IP),
 	}

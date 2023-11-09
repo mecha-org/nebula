@@ -33,6 +33,8 @@ func Test_signHelp(t *testing.T) {
 			"    \tOptional: path to the signing CA cert (default \"ca.crt\")\n"+
 			"  -ca-key string\n"+
 			"    \tOptional: path to the signing CA key (default \"ca.key\")\n"+
+			"  -domains string\n"+
+			"    \tOptional: Assign network domains to the cert, restricting the nodes it can connect to, wildcards not allowed; prefer fully qualified domains\n"+
 			"  -duration duration\n"+
 			"    \tOptional: how long the cert should be valid for. The default is 1 second before the signing cert expires. Valid time units are seconds: \"s\", minutes: \"m\", hours: \"h\"\n"+
 			"  -groups string\n"+

@@ -947,6 +947,7 @@ func (nc *NebulaCertificate) Copy() *NebulaCertificate {
 		Details: NebulaCertificateDetails{
 			Name:            nc.Details.Name,
 			Groups:          make([]string, len(nc.Details.Groups)),
+			Domains:         make([]string, len(nc.Details.Domains)),
 			Ips:             make([]*net.IPNet, len(nc.Details.Ips)),
 			Subnets:         make([]*net.IPNet, len(nc.Details.Subnets)),
 			NotBefore:       nc.Details.NotBefore,
