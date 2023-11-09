@@ -40,7 +40,7 @@ func newSimpleServer(caCrt *cert.NebulaCertificate, caKey []byte, name string, u
 		IP:   udpIp,
 		Port: 4242,
 	}
-	_, _, myPrivKey, myPEM := newTestCert(caCrt, caKey, name, time.Now(), time.Now().Add(5*time.Minute), vpnIpNet, nil, []string{})
+	_, _, myPrivKey, myPEM := newTestCert(caCrt, caKey, name, time.Now(), time.Now().Add(5*time.Minute), vpnIpNet, nil, []string{}, []string{"nebula.net"})
 
 	caB, err := caCrt.MarshalToPEM()
 	if err != nil {
@@ -109,7 +109,7 @@ func newSimpleServer(caCrt *cert.NebulaCertificate, caKey []byte, name string, u
 }
 
 // newTestCaCert will generate a CA cert
-func newTestCaCert(before, after time.Time, ips, subnets []*net.IPNet, groups []string) (*cert.NebulaCertificate, []byte, []byte, []byte) {
+func newTestCaCert(before, after time.Time, ips, subnets []*net.IPNet, groups []string, domains []string) (*cert.NebulaCertificate, []byte, []byte, []byte) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if before.IsZero() {
 		before = time.Now().Add(time.Second * -60).Round(time.Second)
@@ -120,12 +120,13 @@ func newTestCaCert(before, after time.Time, ips, subnets []*net.IPNet, groups []
 
 	nc := &cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:           "test ca",
-			NotBefore:      time.Unix(before.Unix(), 0),
-			NotAfter:       time.Unix(after.Unix(), 0),
-			PublicKey:      pub,
-			IsCA:           true,
-			InvertedGroups: make(map[string]struct{}),
+			Name:            "test ca",
+			NotBefore:       time.Unix(before.Unix(), 0),
+			NotAfter:        time.Unix(after.Unix(), 0),
+			PublicKey:       pub,
+			IsCA:            true,
+			InvertedGroups:  make(map[string]struct{}),
+			InvertedDomains: make(map[string]struct{}),
 		},
 	}
 
@@ -139,6 +140,10 @@ func newTestCaCert(before, after time.Time, ips, subnets []*net.IPNet, groups []
 
 	if len(groups) > 0 {
 		nc.Details.Groups = groups
+	}
+
+	if len(domains) > 0 {
+		nc.Details.Domains = domains
 	}
 
 	err = nc.Sign(cert.Curve_CURVE25519, priv)
@@ -156,7 +161,7 @@ func newTestCaCert(before, after time.Time, ips, subnets []*net.IPNet, groups []
 
 // newTestCert will generate a signed certificate with the provided details.
 // Expiry times are defaulted if you do not pass them in
-func newTestCert(ca *cert.NebulaCertificate, key []byte, name string, before, after time.Time, ip *net.IPNet, subnets []*net.IPNet, groups []string) (*cert.NebulaCertificate, []byte, []byte, []byte) {
+func newTestCert(ca *cert.NebulaCertificate, key []byte, name string, before, after time.Time, ip *net.IPNet, subnets []*net.IPNet, groups []string, domains []string) (*cert.NebulaCertificate, []byte, []byte, []byte) {
 	issuer, err := ca.Sha256Sum()
 	if err != nil {
 		panic(err)
@@ -174,16 +179,18 @@ func newTestCert(ca *cert.NebulaCertificate, key []byte, name string, before, af
 
 	nc := &cert.NebulaCertificate{
 		Details: cert.NebulaCertificateDetails{
-			Name:           name,
-			Ips:            []*net.IPNet{ip},
-			Subnets:        subnets,
-			Groups:         groups,
-			NotBefore:      time.Unix(before.Unix(), 0),
-			NotAfter:       time.Unix(after.Unix(), 0),
-			PublicKey:      pub,
-			IsCA:           false,
-			Issuer:         issuer,
-			InvertedGroups: make(map[string]struct{}),
+			Name:            name,
+			Ips:             []*net.IPNet{ip},
+			Subnets:         subnets,
+			Groups:          groups,
+			Domains:         domains,
+			NotBefore:       time.Unix(before.Unix(), 0),
+			NotAfter:        time.Unix(after.Unix(), 0),
+			PublicKey:       pub,
+			IsCA:            false,
+			Issuer:          issuer,
+			InvertedGroups:  make(map[string]struct{}),
+			InvertedDomains: make(map[string]struct{}),
 		},
 	}
 
